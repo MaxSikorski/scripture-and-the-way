@@ -5,7 +5,9 @@
 // Modes (set data-mode on the #blog-feed element):
 //   "latest"  - render only the newest post plus a link to the archive
 //               (used on index.html)
-//   default   - full archive with a Load More button (used on blog.html)
+//   default   - full archive with a Load More button, day deep-links
+//               (#YYYY-MM-DD), and a "Latest post" return button
+//               (used on blog.html)
 
 console.log('[Blog] Script loaded');
 
@@ -25,11 +27,9 @@ async function init() {
     if (latestMode) POSTS_PER_PAGE = 1;
 
     try {
-        // Try fetching posts.json (works on servers)
+        // Try fetching posts.json (works on servers); shared with streak.js
         console.log('[Blog] Fetching posts.json...');
-        const response = await fetch('posts.json');
-        if (!response.ok) throw new Error("Failed to load registry");
-        allPosts = await response.json();
+        allPosts = await (window.fetchPosts ? window.fetchPosts() : fetch('posts.json').then(r => r.json()));
         console.log('[Blog] Posts loaded:', allPosts.length);
     } catch (e) {
         console.log('[Blog] Fetch failed, using embedded data');
@@ -50,7 +50,22 @@ async function init() {
         return;
     }
 
-    // Render first page of posts
+    // Deep link: blog.html#YYYY-MM-DD shows that day's post(s).
+    // No fade on first paint — there's nothing to fade from.
+    const day = (location.hash || '').slice(1);
+    if (!latestMode && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+        await showDay(day, false);
+        return;
+    }
+
+    await renderDefaultFeed();
+}
+
+async function renderDefaultFeed() {
+    const feed = document.getElementById('blog-feed');
+    feed.innerHTML = '';
+    displayedCount = 0;
+
     for (let i = 0; i < POSTS_PER_PAGE && displayedCount < allPosts.length; i++) {
         await renderNextPost();
     }
@@ -72,9 +87,88 @@ async function init() {
         loadMoreBtn.textContent = 'Load More ↓';
         loadMoreBtn.onclick = loadNextPost;
         feed.appendChild(loadMoreBtn);
-        console.log('[Blog] Load More button added');
     }
 }
+
+// Gentle content swap: fade the feed out, hold its height so the page never
+// jumps, render the new content, then fade back in.
+async function swapFeed(renderFn) {
+    const feed = document.getElementById('blog-feed');
+    const fade = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    feed.style.minHeight = feed.offsetHeight + 'px';
+    if (fade) {
+        feed.classList.add('feed-fading');
+        await new Promise(r => setTimeout(r, 250));
+    }
+
+    await renderFn();
+
+    if (fade) {
+        feed.classList.remove('feed-fading');
+        await new Promise(r => setTimeout(r, 250));
+    }
+    feed.style.minHeight = '';
+}
+
+// Show one specific day's post(s), selected from the streak grid or a
+// #YYYY-MM-DD deep link. Adds a "Latest post" button to return to the feed.
+async function showDay(dateStr, animate = true) {
+    const feed = document.getElementById('blog-feed');
+    const dayPosts = allPosts.filter(p => p.filename.startsWith(dateStr));
+    if (dayPosts.length === 0) return;
+
+    if (history.replaceState) history.replaceState(null, '', '#' + dateStr);
+
+    const panel = document.getElementById('streak-panel');
+    (panel || feed).scrollIntoView({ behavior: window.scrollBehavior || 'smooth', block: 'start' });
+
+    const render = async () => {
+        feed.innerHTML = '';
+        displayedCount = 0;
+
+        const latestBtn = document.createElement('button');
+        latestBtn.className = 'load-more-btn latest-btn';
+        latestBtn.textContent = '↑ Latest post';
+        latestBtn.onclick = showLatest;
+        feed.appendChild(latestBtn);
+
+        for (const postInfo of dayPosts) {
+            let post = postInfo;
+            try {
+                const response = await fetch('blog/' + postInfo.filename);
+                if (response.ok) post = await response.json();
+            } catch (e) {
+                console.log('[Blog] Fetch error:', e.message);
+            }
+            feed.appendChild(createBlogPostElement(post, postInfo));
+        }
+    };
+
+    if (animate) await swapFeed(render);
+    else await render();
+}
+
+async function showLatest() {
+    if (history.replaceState) history.replaceState(null, '', location.pathname);
+    const feed = document.getElementById('blog-feed');
+    const panel = document.getElementById('streak-panel');
+    (panel || feed).scrollIntoView({ behavior: window.scrollBehavior || 'smooth', block: 'start' });
+    await swapFeed(renderDefaultFeed);
+}
+
+// The streak grid calls this when a filled square is clicked
+window.scriptureShowDay = (dateStr) => {
+    if (latestMode || !document.getElementById('blog-feed')) {
+        location.href = 'blog.html#' + dateStr;
+        return;
+    }
+    showDay(dateStr);
+};
+
+window.addEventListener('hashchange', () => {
+    const day = (location.hash || '').slice(1);
+    if (!latestMode && /^\d{4}-\d{2}-\d{2}$/.test(day)) showDay(day);
+});
 
 async function loadNextPost() {
     console.log('[Blog] loadNextPost() called, displayed:', displayedCount, 'total:', allPosts.length);
@@ -103,37 +197,34 @@ async function loadNextPost() {
     // Scroll to the first newly loaded post
     const posts = feed.querySelectorAll('.blog-post');
     if (posts.length > firstNewIndex) {
-        posts[firstNewIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        posts[firstNewIndex].scrollIntoView({ behavior: window.scrollBehavior || 'smooth', block: 'start' });
     }
 }
 
 async function renderNextPost() {
     if (displayedCount >= allPosts.length) return;
-    
+
     const postInfo = allPosts[displayedCount];
     console.log('[Blog] Rendering post index:', displayedCount, 'filename:', postInfo.filename);
-    
+
     // Fetch the actual blog post content
     let post = postInfo;
     const postUrl = 'blog/' + postInfo.filename;
-    console.log('[Blog] Fetching URL:', postUrl);
-    
+
     try {
         const response = await fetch(postUrl);
-        console.log('[Blog] Response status:', response.status);
         if (response.ok) {
             post = await response.json();
-            console.log('[Blog] Post content loaded');
         }
     } catch (e) {
         console.log('[Blog] Fetch error:', e.message);
     }
-    
+
     const feed = document.getElementById('blog-feed');
     if (!feed) return;
-    
+
     const postElement = createBlogPostElement(post, postInfo);
-    
+
     // Insert before the Load More button
     const loadMoreBtn = feed.querySelector('.load-more-btn');
     if (loadMoreBtn) {
@@ -141,24 +232,23 @@ async function renderNextPost() {
     } else {
         feed.appendChild(postElement);
     }
-    
+
     displayedCount++;
-    console.log('[Blog] Post rendered, displayedCount is now:', displayedCount);
 }
 
 function createBlogPostElement(post, postInfo) {
     const article = document.createElement('article');
     article.className = 'blog-post';
-    
+
     // Check if fullChapter exists (new format) or fallback to scripture
     const fullChapter = post.fullChapter || post.scripture || '';
-    
+
     article.innerHTML = `
         <div class="blog-post-header">
             <div class="blog-date">${postInfo.date}</div>
             <h3 class="blog-chapter">${postInfo.title}</h3>
         </div>
-        
+
         ${fullChapter ? `
         <div class="chapter-container">
             <div class="chapter-toggle" onclick="toggleChapter(this)">
@@ -170,7 +260,7 @@ function createBlogPostElement(post, postInfo) {
             </div>
         </div>
         ` : ''}
-        
+
         <div class="blog-body">
             <div class="blog-section">
                 <div class="blog-section-title">What I Learned</div>
@@ -198,7 +288,7 @@ function createBlogPostElement(post, postInfo) {
             </div>
         </div>
     `;
-    
+
     return article;
 }
 
@@ -207,7 +297,7 @@ function toggleChapter(toggleElement) {
     const chapter = container.querySelector('.full-chapter');
     const textSpan = toggleElement.querySelector('.chapter-toggle-text');
     const arrowSpan = toggleElement.querySelector('.chapter-toggle-arrow');
-    
+
     if (chapter.style.display === 'none') {
         chapter.style.display = 'block';
         textSpan.textContent = '📖 Collapse Chapter';

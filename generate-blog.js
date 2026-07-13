@@ -459,6 +459,7 @@ function updatePostsRegistry(savedResult) {
         title: fullPost.chapter,
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         filename: filename,
+        verseCount: fullPost.verseCount,
         tags: ['Scripture', 'Faith', 'HolySpiritOS']
     };
     
