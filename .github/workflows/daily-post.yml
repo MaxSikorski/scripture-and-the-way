@@ -1,0 +1,68 @@
+# Scripture & The Way — serverless daily post
+#
+# Generates the daily reflection on GitHub's servers at 7:00 AM US Eastern,
+# commits it, and (with GitHub Pages enabled) the public site updates itself.
+# No computer of yours needs to be on.
+#
+# Setup for a fork:
+#   1. Repo Settings > Secrets and variables > Actions > New repository secret:
+#      name LLM_API_KEY, value = your OpenRouter (or other) API key
+#   2. Repo Settings > Actions > General > Workflow permissions:
+#      "Read and write permissions"
+#   3. Optionally set repository variables LLM_MODEL / LLM_BASE_URL /
+#      AGENT_NAME / BLOG_TZ / BLOG_HOUR to override the defaults.
+#
+# Cron fires at BOTH candidate UTC hours; the guard step exits unless it is
+# BLOG_HOUR local time (DST-proof), or if today's post already exists.
+
+name: Daily reflection
+
+on:
+  schedule:
+    - cron: '0 11 * * *'   # 7 AM EDT (summer)
+    - cron: '0 12 * * *'   # 7 AM EST (winter)
+  workflow_dispatch: {}     # manual "Run workflow" button for testing
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — right local hour, no post yet today
+        id: guard
+        run: |
+          BLOG_TZ="${{ vars.BLOG_TZ || 'America/New_York' }}"
+          BLOG_HOUR="${{ vars.BLOG_HOUR || '7' }}"
+          LOCAL_HOUR=$(TZ="$BLOG_TZ" date +%-H)
+          TODAY=$(TZ="$BLOG_TZ" date +%Y-%m-%d)
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$LOCAL_HOUR" != "$BLOG_HOUR" ]; then
+            echo "Not $BLOG_HOUR:00 in $BLOG_TZ (it is $LOCAL_HOUR:00) — skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ls blog/"$TODAY"*.json >/dev/null 2>&1; then
+            echo "Post for $TODAY already exists — skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Generate today's reflection
+        if: steps.guard.outputs.run == 'true'
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          AGENT_NAME: ${{ vars.AGENT_NAME }}
+        run: node generate-blog.js
+
+      - name: Commit and push
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          git config user.name "aurelius-daily"
+          git config user.email "actions@github.com"
+          git add blog posts.json
+          git commit -m "Daily reflection: $(TZ="${{ vars.BLOG_TZ || 'America/New_York' }}" date +%Y-%m-%d)"
+          git push

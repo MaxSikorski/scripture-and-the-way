@@ -1,0 +1,24 @@
+# systemd unit for the Scripture & The Way website (Linux).
+# 1. Replace YOUR_USER and /path/to/scripture-and-the-way below
+# 2. sudo cp scripture-way.service.example /etc/systemd/system/scripture-way.service
+# 3. sudo systemctl enable --now scripture-way
+
+[Unit]
+Description=Scripture & The Way Website
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/path/to/scripture-and-the-way
+ExecStart=/usr/bin/node server.js 8888
+Restart=always
+RestartSec=10
+
+StandardOutput=append:/path/to/scripture-and-the-way/logs/server.log
+StandardError=append:/path/to/scripture-and-the-way/logs/server-error.log
+
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
