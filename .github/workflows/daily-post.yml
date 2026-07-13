@@ -12,8 +12,10 @@
 #   3. Optionally set repository variables LLM_MODEL / LLM_BASE_URL /
 #      AGENT_NAME / BLOG_TZ / BLOG_HOUR to override the defaults.
 #
-# Cron fires at BOTH candidate UTC hours; the guard step exits unless it is
-# BLOG_HOUR local time (DST-proof), or if today's post already exists.
+# GitHub's scheduled runs are queued and often fire 1-3 hours LATE, so the
+# guard is "not before BLOG_HOUR local, and not twice a day" — a delayed run
+# still generates. Multiple crons give a late morning several chances; the
+# same-day check makes them all no-ops once the post exists.
 
 name: Daily reflection
 
@@ -21,6 +23,8 @@ on:
   schedule:
     - cron: '0 11 * * *'   # 7 AM EDT (summer)
     - cron: '0 12 * * *'   # 7 AM EST (winter)
+    - cron: '0 15 * * *'   # catch-up if the morning runs were delayed/skipped
+    - cron: '0 18 * * *'   # last catch-up of the day
   workflow_dispatch: {}     # manual "Run workflow" button for testing
 
 permissions:
@@ -30,7 +34,7 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Guard — right local hour, no post yet today
         id: guard
@@ -39,8 +43,8 @@ jobs:
           BLOG_HOUR="${{ vars.BLOG_HOUR || '7' }}"
           LOCAL_HOUR=$(TZ="$BLOG_TZ" date +%-H)
           TODAY=$(TZ="$BLOG_TZ" date +%Y-%m-%d)
-          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$LOCAL_HOUR" != "$BLOG_HOUR" ]; then
-            echo "Not $BLOG_HOUR:00 in $BLOG_TZ (it is $LOCAL_HOUR:00) — skipping."
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$LOCAL_HOUR" -lt "$BLOG_HOUR" ]; then
+            echo "Before $BLOG_HOUR:00 in $BLOG_TZ (it is $LOCAL_HOUR:00) — skipping."
             echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
           if ls blog/"$TODAY"*.json >/dev/null 2>&1; then
