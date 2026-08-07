@@ -7,13 +7,14 @@ const TOTAL_CHAPTERS = 1189; // 66 books, KJV
 
 async function initStreak() {
     const panel = document.getElementById('streak-panel');
-    if (!panel) return;
+    const heroStreakEl = document.getElementById('hero-streak');
+    if (!panel && !heroStreakEl) return;
 
     let registry = [];
     try {
         registry = await (window.fetchPosts ? window.fetchPosts() : fetch('posts.json').then(r => r.json()));
     } catch (e) {
-        panel.style.display = 'none';
+        if (panel) panel.style.display = 'none';
         return;
     }
 
@@ -30,6 +31,7 @@ async function initStreak() {
 
     const stats = computeStreaks(dates);
 
+    if (panel) {
     panel.innerHTML = `
         <div class="streak-stats">
             <div class="streak-stat">
@@ -57,9 +59,10 @@ async function initStreak() {
     `;
 
     renderGrid(document.getElementById('streak-grid'), titlesByDate);
+    }
 
     // Live streak line under the hero buttons (index.html only)
-    const heroStreak = document.getElementById('hero-streak');
+    const heroStreak = heroStreakEl;
     if (heroStreak && stats.current > 0) {
         const first = Object.keys(titlesByDate).sort()[0];
         const firstLabel = new Date(first + 'T00:00:00Z').toLocaleDateString('en-US',

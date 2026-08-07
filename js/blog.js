@@ -46,7 +46,7 @@ async function init() {
     }
 
     if (allPosts.length === 0) {
-        feed.innerHTML = '<div class="blog-loading">No blog posts yet. Check back at 7am EST!</div>';
+        feed.innerHTML = '<div class="blog-loading">No blog posts yet. Check back at 6am Eastern!</div>';
         return;
     }
 
