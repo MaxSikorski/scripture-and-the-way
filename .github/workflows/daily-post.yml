@@ -1,8 +1,8 @@
 # Scripture & The Way — serverless daily post
 #
-# Generates the daily reflection on GitHub's servers at 7:00 AM US Eastern,
-# commits it, and (with GitHub Pages enabled) the public site updates itself.
-# No computer of yours needs to be on.
+# Generates the daily reflection on GitHub's servers at 6:00 AM US Eastern
+# (wall clock, DST handled by the guard), commits it, and (with GitHub Pages
+# enabled) the public site updates itself. No computer of yours needs to be on.
 #
 # Setup for a fork:
 #   1. Repo Settings > Secrets and variables > Actions > New repository secret:
@@ -15,20 +15,22 @@
 # GitHub's scheduled runs are queued and often fire 1-3 hours LATE, so the
 # guard is "not before BLOG_HOUR local, and not twice a day" — a delayed run
 # still generates. Multiple crons give a late morning several chances; the
-# same-day check makes them all no-ops once the post exists.
+# same-day check makes them all no-ops once the post exists. Off-peak minutes
+# (:07, not :00) dodge the worst of GitHub's top-of-the-hour queue congestion.
 
 name: Daily reflection
 
 on:
   schedule:
-    - cron: '0 11 * * *'   # 7 AM EDT (summer)
-    - cron: '0 12 * * *'   # 7 AM EST (winter)
-    - cron: '0 15 * * *'   # catch-up if the morning runs were delayed/skipped
-    - cron: '0 18 * * *'   # last catch-up of the day
+    - cron: '7 10 * * *'   # 6:07 AM EDT (summer); 5:07 EST in winter → guard skips
+    - cron: '7 11 * * *'   # 6:07 AM EST (winter); 7:07 EDT summer backup
+    - cron: '7 14 * * *'   # catch-up if the morning runs were delayed/skipped
+    - cron: '7 17 * * *'   # last catch-up of the day
   workflow_dispatch: {}     # manual "Run workflow" button for testing
 
 permissions:
   contents: write
+  pages: write             # lets verify-live re-request a Pages build if the deploy stalls
 
 jobs:
   generate:
@@ -40,7 +42,7 @@ jobs:
         id: guard
         run: |
           BLOG_TZ="${{ vars.BLOG_TZ || 'America/New_York' }}"
-          BLOG_HOUR="${{ vars.BLOG_HOUR || '7' }}"
+          BLOG_HOUR="${{ vars.BLOG_HOUR || '6' }}"
           LOCAL_HOUR=$(TZ="$BLOG_TZ" date +%-H)
           TODAY=$(TZ="$BLOG_TZ" date +%Y-%m-%d)
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$LOCAL_HOUR" -lt "$BLOG_HOUR" ]; then
@@ -70,3 +72,55 @@ jobs:
           git add blog posts.json
           git commit -m "Daily reflection: $(TZ="${{ vars.BLOG_TZ || 'America/New_York' }}" date +%Y-%m-%d)"
           git push
+
+  # Self-heal for the failure mode where the post is committed but the Pages
+  # deploy silently fails or stalls (e.g. a GitHub Actions/Pages outage): poll
+  # the live site for today's post, and if the repo has it but the site does
+  # not, re-request a Pages build via the API. Runs on every trigger — even
+  # when generate was a no-op — so afternoon catch-up crons also heal a
+  # morning deploy that died.
+  verify-live:
+    needs: generate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main          # pick up the commit generate just pushed, not the trigger SHA
+
+      - name: Verify today's post is live (re-request Pages build if not)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BLOG_TZ="${{ vars.BLOG_TZ || 'America/New_York' }}"
+          TODAY=$(TZ="$BLOG_TZ" date +%Y-%m-%d)
+          SITE="https://maxsikorski.github.io/scripture-and-the-way"
+
+          if ! ls blog/"$TODAY"*.json >/dev/null 2>&1; then
+            echo "Repo has no post for $TODAY yet (pre-$BLOG_TZ-morning run) — nothing to verify."
+            exit 0
+          fi
+
+          is_live() {
+            curl -fsS "$SITE/posts.json?nocache=$(date +%s)" | grep -q "$TODAY"
+          }
+
+          # Give the normal Pages deploy up to ~5 minutes.
+          for i in 1 2 3 4 5; do
+            if is_live; then echo "Post for $TODAY is live."; exit 0; fi
+            echo "Attempt $i: not live yet, waiting 60s..."
+            sleep 60
+          done
+
+          echo "Post for $TODAY is in the repo but NOT live — requesting a fresh Pages build."
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds"
+
+          # Give the re-requested build up to ~5 more minutes.
+          for i in 1 2 3 4 5; do
+            sleep 60
+            if is_live; then echo "Recovered: post for $TODAY is live after rebuild."; exit 0; fi
+            echo "Rebuild check $i: still not live..."
+          done
+
+          echo "::error::Post for $TODAY still not live after a re-requested Pages build. Check https://www.githubstatus.com and the pages-build-deployment runs."
+          exit 1
