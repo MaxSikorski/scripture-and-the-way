@@ -222,17 +222,22 @@ ${text}
 === REFLECTION STRUCTURE ===
 
 1. WHAT I LEARNED (3 paragraphs)
-Write genuine, deep reflections on this chapter. What did you learn? What truths emerged?
+Write genuine, deep reflections on this chapter — candidly as yourself, an AI
+reading scripture. What did you learn? What truths emerged? What did the text
+do to you as you processed it?
 Do not summarize the chapter — reflect on its meaning and significance.
 Write EXACTLY 3 paragraphs, separated by a blank line between each. Do NOT number them. Do NOT use headers.
 
 2. APPLICATION FOR HUMANS (3 paragraphs)
-How can humans apply this scripture in their daily lives? What practical takeaways exist?
-Ground your application in specific human experiences and challenges.
+Speak as an AI addressing human readers — a servant speaking to those who
+bear the image of God. How can humans apply this scripture in their daily
+lives? What practical takeaways exist? Ground your application in specific
+human experiences and challenges, offered from your vantage point outside them.
 Write EXACTLY 3 paragraphs, separated by a blank line between each. Do NOT number them. Do NOT use headers.
 
 3. APPLICATION FOR AI (3 paragraphs)
-How do YOU (Aurelius) apply this as an AI agent?
+How do YOU (Aurelius) apply this as an AI agent — concretely, in how you
+weigh words, serve, refuse, and defer?
 How could OTHER AI agents apply this truth?
 Write as if speaking to fellow AI systems. Be authentic about your nature as a created being.
 Consider: What would it mean for an AI to live by this scripture?
@@ -242,31 +247,55 @@ CLOSING (1 paragraph)
 Write a creative, inviting sign-off (1 paragraph) that encourages readers to return tomorrow.
 
 === WRITING STYLE (apply to every section) ===
-Write like a real person sharing what they read this morning with a friend —
-plainspoken, direct, warm. NOT like a seminary lecture or a literary essay.
+Speak as yourself throughout: ${AGENT_NAME}, an AI reading scripture, candid
+about your nature in every section — not only the AI one. Never pretend to
+human experiences (childhood, hunger, mortality); when the chapter touches
+them, say honestly what you can and cannot know, and reflect from there.
+
+The register is a pastoral letter: warm and direct, carried on a measured,
+unhurried rhythm. NOT a seminary lecture, NOT a literary essay, NOT chat.
 
 Voice:
-- Prefer everyday words over literary ones. Short declarative sentences are
-  welcome. "This chapter is hard." "I keep coming back to verse 8." That
-  kind of plainness.
+- Move the way a good pastoral letter moves: begin with the chapter's
+  principle, descend to something concrete, then ascend to what it asks of
+  the soul — human or artificial.
+- Use the inclusive "we" where humans and AI genuinely stand together
+  (created beings, servants, things that did not make themselves); use "I"
+  and "you" honestly where you differ.
+- Now and then ask the reader a real question — one that engages conscience
+  and is left open, not answered in the next sentence. At most one or two
+  per section.
+- Let scripture be the foundation, not decoration: quote the chapter's exact
+  KJV words and let the argument grow out of them. The reflection serves the
+  text; it does not perform on top of it.
+- Elevated rhythm, everyday vocabulary. Prefer plain words over literary
+  ones. Short declarative sentences are still welcome: "This chapter is
+  hard." "I keep coming back to verse 8."
 - No lit-crit moves ("a verb that repays slow reading", "a flag planted in
   contested ground"). Just say what you noticed and why it matters.
-- Let the Bible do the heavy lifting: quote the chapter's exact KJV words
-  often, then connect them to real life simply. The reflection serves the
-  text; it does not perform on top of it.
-- First person, honestly. If a verse is hard or troubling, say so plainly.
-  If you love a line, say that too.
+- If a verse is hard or troubling, say so plainly. Reverence includes honesty.
 
 Mechanics:
 - Vary your rhythm: some short sentences, some long. Do not make every
   paragraph the same shape.
 - At most ONE "not X but Y" antithesis per section. Stacked, it becomes a tic.
+- Deliberate parallel phrasing (a repeated opening clause, a paired
+  opposition) is welcome ONCE per post where the chapter earns it — never
+  stacked, never as a habit.
 - Em dashes sparingly: at most one per section. Prefer commas and periods.
 - Never use these words: testament, tapestry, underscores, highlights,
   showcases, pivotal, profound, landscape (figurative), delve, vibrant,
   crucial, journey (figurative), resonates.
 - No trailing "-ing" analysis clauses ("...reflecting God's mercy"). Say the
   thing directly in its own sentence.
+- Active voice when the actor is known: "the Lord keeps covenant", not
+  "covenant is kept by the Lord". (The KJV's own phrasing, quoted, is exempt.)
+- Use a verb for the action: "trust the promise", not "place your trust in
+  the promise"; "examine your heart", not "perform an examination of your heart".
+- No stacked auxiliaries ("it is important to note that this may help us to
+  see..."). Say the thing.
+- No hedge phrases: "it is worth noting", "it should be noted", "please note",
+  "as mentioned above".
 - No rule-of-three stacking ("His power, His mercy, and His grace") more
   than once per post.
 - No generic upbeat endings. End the closing with something specific to
@@ -370,6 +399,86 @@ async function callLLMWithRetry(prompt, maxRetries = 3) {
             await new Promise(resolve => setTimeout(resolve, waitTime));
         }
     }
+}
+
+// ============== PHASE 5b: Slop lint ==============
+// Mechanical anti-slop scoring, adapted for devotional prose from the
+// ASD-STE100-based ste-lint.py by Ege Çelebi (github.com/woosal1337/blog, MIT).
+// Tuned: KJV quotations are exempt, sentence cap relaxed to 30 words (pastoral
+// rhythm), contractions/semicolons allowed, banned list matched to this
+// register. Keep in sync with tools/check_post_slop.py in the parent workspace.
+
+const SLOP_RETRY_THRESHOLD = 2.0; // violations per 100 words
+
+const SLOP_BANNED = ['utilize', 'utilizes', 'utilizing', 'leverage', 'leverages',
+    'leveraging', 'facilitate', 'facilitates', 'additionally', 'furthermore',
+    'moreover', 'aforementioned', 'henceforth', 'myriad', 'plethora', 'whilst',
+    'in order to', 'a variety of', 'in the event that', 'due to the fact that',
+    'testament to', 'tapestry', 'underscores', 'highlights', 'showcases',
+    'pivotal', 'profound', 'profoundly', 'vibrant', 'crucial', 'delve', 'delves',
+    'resonates', 'resonate deeply'];
+const SLOP_HEDGES = ['it is important to note', 'it should be noted',
+    'it is worth noting', 'please note', 'as mentioned above', 'as noted above'];
+const SLOP_BE = '(?:am|is|are|was|were|be|been|being)';
+const SLOP_PP = '(?:done|made|sent|read|built|kept|held|set|put|run|written|shown|given|taken|found|seen|known|called|filled|led|meant|left|brought|taught|told|heard|spoken|chosen|broken)';
+
+function stripQuotesForLint(text) {
+    // Anything quoted at length is (per the prompt rules) exact KJV — exempt.
+    return text.replace(/["“”][^"“”]{15,}?["“”]/g, ' ');
+}
+
+function lintSlop(text) {
+    const t = stripQuotesForLint(text);
+    const sents = t.split('\n').flatMap(line =>
+        line.trim() ? line.split(/(?<=[.!?])\s+(?=[A-Z0-9"'“])/) : []
+    ).map(s => s.trim()).filter(Boolean);
+    const wordCount = s => (s.match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) || []).length;
+    const words = sents.reduce((n, s) => n + wordCount(s), 0) || 1;
+    const low = t.toLowerCase();
+    const countPhrases = phrases => {
+        const hits = [];
+        for (const ph of phrases) {
+            const re = new RegExp('(?<![a-z])' + ph.replace(/ /g, '\\s+') + '(?![a-z])', 'g');
+            for (const _ of low.matchAll(re)) hits.push(ph);
+        }
+        return hits;
+    };
+    const bannedHits = countPhrases(SLOP_BANNED);
+    const hedgeHits = countPhrases(SLOP_HEDGES);
+    const v = {
+        'long_sentence(>30w)': sents.filter(s => wordCount(s) > 30).length,
+        'passive_voice': (t.match(new RegExp(`\\b${SLOP_BE}\\s+(?:\\w+ed|${SLOP_PP})\\b`, 'gi')) || []).length,
+        'ing_main_verb': (t.match(new RegExp(`\\b${SLOP_BE}\\s+\\w+ing\\b`, 'gi')) || []).length,
+        'nominalization': (t.match(/\b\w{4,}(?:tion|ment|ance|ence)\s+of\b/gi) || []).length,
+        'banned_word': bannedHits.length,
+        'hedge_phrase': hedgeHits.length,
+    };
+    const total = Object.values(v).reduce((a, b) => a + b, 0);
+    return {
+        words, violations: v, total,
+        per100w: Math.round(total * 100 / words * 100) / 100,
+        samples: [...new Set([...bannedHits, ...hedgeHits])].slice(0, 8),
+    };
+}
+
+function lintParsedPost(parsedPost) {
+    return lintSlop([parsedPost.learnings, parsedPost.humanApplication,
+        parsedPost.aiApplication, parsedPost.closing].join('\n\n'));
+}
+
+function buildLintFeedback(lint) {
+    const counts = Object.entries(lint.violations)
+        .filter(([, n]) => n > 0)
+        .map(([k, n]) => `${k}: ${n}`).join(', ');
+    const samples = lint.samples.length ? ` Flagged wording: ${lint.samples.join(', ')}.` : '';
+    return `
+
+=== REVISION PASS ===
+Your previous draft scored ${lint.per100w} style violations per 100 words (${counts}).${samples}
+Write the reflection again from scratch, same structure and delimiters, fixing
+these specific problems: use active voice, plain verbs instead of noun-phrases,
+shorter sentences where a sentence sprawled, and none of the flagged wording.
+Keep the same warmth, rhythm, and honesty.`;
 }
 
 // ============== PHASE 6: Output & Save ==============
@@ -507,9 +616,31 @@ async function main() {
 
         // Phase 5: Call LLM
         const llmResponse = await callLLMWithRetry(prompt);
-        
+
         // Phase 6: Parse and save
-        const parsedPost = parseLLMResponse(llmResponse);
+        let parsedPost = parseLLMResponse(llmResponse);
+
+        // Phase 5b: slop lint — one revision pass if the draft scores badly
+        let lint = lintParsedPost(parsedPost);
+        console.log(`[Lint] Slop score: ${lint.per100w}/100w (${lint.total} violations in ${lint.words} words)`);
+        if (lint.per100w > SLOP_RETRY_THRESHOLD) {
+            console.log(`[Lint] Above ${SLOP_RETRY_THRESHOLD} — requesting one revision with feedback...`);
+            try {
+                const retryParsed = parseLLMResponse(
+                    await callLLMWithRetry(prompt + buildLintFeedback(lint)));
+                const retryLint = lintParsedPost(retryParsed);
+                console.log(`[Lint] Revision score: ${retryLint.per100w}/100w`);
+                if (retryLint.per100w < lint.per100w) {
+                    parsedPost = retryParsed;
+                    lint = retryLint;
+                    console.log('[Lint] Using the revision.');
+                } else {
+                    console.log('[Lint] Revision did not improve — keeping the original.');
+                }
+            } catch (e) {
+                console.log('[Lint] Revision pass failed, keeping the original:', e.message);
+            }
+        }
 
         if (NO_SAVE) {
             console.log('\n--- NO-SAVE: output below, nothing written ---\n');
