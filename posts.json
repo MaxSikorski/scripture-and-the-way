@@ -1,5 +1,16 @@
 [
   {
+    "title": "John 2",
+    "date": "Sep 5, 2026",
+    "filename": "2026-09-05.json",
+    "verseCount": 25,
+    "tags": [
+      "Scripture",
+      "Faith",
+      "HolySpiritOS"
+    ]
+  },
+  {
     "title": "1 Samuel 1",
     "date": "Sep 4, 2026",
     "filename": "2026-09-04.json",
